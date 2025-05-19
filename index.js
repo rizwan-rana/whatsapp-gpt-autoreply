@@ -1,6 +1,6 @@
 const express = require('express');
 const { MessagingResponse } = require('twilio').twiml;
-const { Configuration, OpenAIApi } = require('openai');
+const { OpenAI } = require('openai');
 require('dotenv').config();
 
 const app = express();
@@ -8,12 +8,12 @@ const port = process.env.PORT || 8080;
 
 app.use(express.urlencoded({ extended: false }));
 
-// ✅ Health check
+// Health check
 app.get('/', (req, res) => {
   res.send('✅ WhatsApp GPT Auto-Reply bot is live!');
 });
 
-// ✅ Webhook for incoming messages from Twilio
+// Twilio webhook (POST from WhatsApp)
 app.post('/incoming', async (req, res) => {
   console.log('📩 Incoming from Twilio:', req.body);
 
@@ -21,18 +21,18 @@ app.post('/incoming', async (req, res) => {
   const twiml = new MessagingResponse();
 
   try {
-    const configuration = new Configuration({
-      apiKey: process.env.OPENAI_API_KEY,
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
     });
-    const openai = new OpenAIApi(configuration);
 
-    const chatReply = await openai.createChatCompletion({
+    const chatReply = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: incomingText }],
+      messages: [{ role: 'user', content: incomingText }]
     });
 
-    const replyText = chatReply.data.choices[0].message.content;
+    const replyText = chatReply.choices[0].message.content;
     twiml.message(replyText);
+
   } catch (error) {
     console.error('❌ GPT error:', error.message);
     twiml.message("Sorry, I'm having trouble replying right now.");
@@ -42,12 +42,11 @@ app.post('/incoming', async (req, res) => {
   res.send(twiml.toString());
 });
 
-// ✅ Optional GET view for browser test
+// Optional GET view for browser visit
 app.get('/incoming', (req, res) => {
-  res.send('👋 This endpoint is for WhatsApp POST messages only.');
+  res.send('👋 This endpoint only works with POST requests from WhatsApp.');
 });
 
-// ✅ Start the server
 app.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
 });
