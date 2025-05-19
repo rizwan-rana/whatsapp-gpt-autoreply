@@ -1,7 +1,7 @@
 const express = require('express');
 const { MessagingResponse } = require('twilio').twiml;
-const { Configuration, OpenAIApi } = require("openai");
 require('dotenv').config();
+const OpenAI = require('openai');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -13,7 +13,7 @@ app.get('/', (req, res) => {
   res.send('✅ WhatsApp GPT Auto-Reply bot is live!');
 });
 
-// Webhook for WhatsApp
+// Webhook for Twilio
 app.post('/incoming', async (req, res) => {
   console.log('📩 Incoming from Twilio:', req.body);
 
@@ -21,18 +21,18 @@ app.post('/incoming', async (req, res) => {
   const twiml = new MessagingResponse();
 
   try {
-    const configuration = new Configuration({
-      apiKey: process.env.OPENAI_API_KEY
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
     });
-    const openai = new OpenAIApi(configuration);
 
-    const chatReply = await openai.createChatCompletion({
+    const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: incomingText }]
+      messages: [{ role: 'user', content: incomingText }],
     });
 
-    const replyText = chatReply.data.choices[0].message.content;
-    twiml.message(replyText);
+    const reply = response.choices[0].message.content;
+    twiml.message(reply);
+
   } catch (error) {
     console.error('❌ GPT error:', error.message);
     twiml.message("Sorry, I'm having trouble replying right now.");
@@ -42,9 +42,9 @@ app.post('/incoming', async (req, res) => {
   res.send(twiml.toString());
 });
 
-// Optional view if /incoming is opened directly
+// Fallback GET
 app.get('/incoming', (req, res) => {
-  res.send('👋 This endpoint is for WhatsApp POST messages only.');
+  res.send('👋 This endpoint only supports POST requests from WhatsApp.');
 });
 
 app.listen(port, () => {
