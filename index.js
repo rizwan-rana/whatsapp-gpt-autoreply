@@ -1,17 +1,30 @@
-const express = require("express");
-const app = express();
-const MessagingResponse = require("twilio").twiml.MessagingResponse;
+const express = require('express');
+const { MessagingResponse } = require('twilio').twiml;
 
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Parse Twilio's POST request
 app.use(express.urlencoded({ extended: false }));
 
-app.post("/incoming", (req, res) => {
-  const incomingMsg = req.body.Body || "No message";
-  const twiml = new MessagingResponse();
-  twiml.message(`You said: ${incomingMsg}`);
-  res.writeHead(200, { "Content-Type": "text/xml" });
-  res.end(twiml.toString());
+// Health check
+app.get('/', (req, res) => {
+  res.send('✅ WhatsApp GPT Auto-Reply bot is live!');
 });
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Bot is live");
+// ✅ Twilio webhook (POST only)
+app.post('/incoming', (req, res) => {
+  console.log('📩 Incoming from Twilio:', req.body);
+
+  const msg = req.body.Body || 'Empty';
+  const twiml = new MessagingResponse();
+  twiml.message(`You said: ${msg}`);
+
+  res.type('text/xml');
+  res.send(twiml.toString());
+});
+
+// Start server
+app.listen(port, () => {
+  console.log(`🚀 Server running on port ${port}`);
 });
