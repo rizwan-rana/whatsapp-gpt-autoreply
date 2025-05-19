@@ -8,12 +8,10 @@ const port = process.env.PORT || 8080;
 
 app.use(express.urlencoded({ extended: false }));
 
-// Health check
 app.get('/', (req, res) => {
   res.send('✅ WhatsApp GPT Auto-Reply bot is live!');
 });
 
-// Webhook for Twilio
 app.post('/incoming', async (req, res) => {
   console.log('📩 Incoming from Twilio:', req.body);
 
@@ -25,12 +23,12 @@ app.post('/incoming', async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const response = await openai.chat.completions.create({
+    const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [{ role: 'user', content: incomingText }],
     });
 
-    const reply = response.choices[0].message.content;
+    const reply = completion.choices[0].message.content;
     twiml.message(reply);
 
   } catch (error) {
@@ -42,7 +40,6 @@ app.post('/incoming', async (req, res) => {
   res.send(twiml.toString());
 });
 
-// Fallback GET
 app.get('/incoming', (req, res) => {
   res.send('👋 This endpoint only supports POST requests from WhatsApp.');
 });
