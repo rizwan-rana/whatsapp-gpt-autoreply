@@ -1,24 +1,17 @@
-const express = require('express');
+const express = require("express");
 const app = express();
-const port = process.env.PORT || 8080; // Make sure this uses Railway’s default
+const MessagingResponse = require("twilio").twiml.MessagingResponse;
 
-// Middleware to parse JSON
-app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-// Health check endpoint
-app.get('/', (req, res) => {
-  res.send('✅ WhatsApp GPT Auto-Reply is live!');
+app.post("/incoming", (req, res) => {
+  const incomingMsg = req.body.Body || "No message";
+  const twiml = new MessagingResponse();
+  twiml.message(`You said: ${incomingMsg}`);
+  res.writeHead(200, { "Content-Type": "text/xml" });
+  res.end(twiml.toString());
 });
 
-// Webhook endpoint for Twilio
-app.post('/webhook', (req, res) => {
-  console.log('📨 Incoming message from Twilio:', req.body);
-
-  // Placeholder for reply logic
-  res.status(200).send('Webhook received ✅');
-});
-
-// Start the server
-app.listen(port, () => {
-  console.log(`🚀 Server running on port ${port}`);
+app.listen(process.env.PORT || 3000, () => {
+  console.log("Bot is live");
 });
