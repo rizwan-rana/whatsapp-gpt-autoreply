@@ -1,17 +1,19 @@
 const express = require('express');
 const { MessagingResponse } = require('twilio').twiml;
+const { OpenAI } = require('openai');
 require('dotenv').config();
-const OpenAI = require('openai');
 
 const app = express();
 const port = process.env.PORT || 8080;
 
 app.use(express.urlencoded({ extended: false }));
 
+// Health check
 app.get('/', (req, res) => {
   res.send('✅ WhatsApp GPT Auto-Reply bot is live!');
 });
 
+// WhatsApp webhook
 app.post('/incoming', async (req, res) => {
   console.log('📩 Incoming from Twilio:', req.body);
 
@@ -23,13 +25,13 @@ app.post('/incoming', async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const completion = await openai.chat.completions.create({
+    const chatReply = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [{ role: 'user', content: incomingText }],
     });
 
-    const reply = completion.choices[0].message.content;
-    twiml.message(reply);
+    const replyText = chatReply.choices[0].message.content;
+    twiml.message(replyText);
 
   } catch (error) {
     console.error('❌ GPT error:', error.message);
@@ -40,8 +42,9 @@ app.post('/incoming', async (req, res) => {
   res.send(twiml.toString());
 });
 
+// Optional browser access to /incoming
 app.get('/incoming', (req, res) => {
-  res.send('👋 This endpoint only supports POST requests from WhatsApp.');
+  res.send('👋 This endpoint only works with POST requests from WhatsApp.');
 });
 
 app.listen(port, () => {
