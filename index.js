@@ -4,15 +4,15 @@ const { MessagingResponse } = require('twilio').twiml;
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Parse Twilio's POST request
+// Parse URL-encoded POST data from Twilio
 app.use(express.urlencoded({ extended: false }));
 
-// Health check
+// ✅ Health check for Railway or browser
 app.get('/', (req, res) => {
   res.send('✅ WhatsApp GPT Auto-Reply bot is live!');
 });
 
-// ✅ Twilio webhook (POST only)
+// ✅ Twilio webhook POST handler
 app.post('/incoming', (req, res) => {
   console.log('📩 Incoming from Twilio:', req.body);
 
@@ -22,6 +22,11 @@ app.post('/incoming', (req, res) => {
 
   res.type('text/xml');
   res.send(twiml.toString());
+});
+
+// ✅ Friendly message for browser visit to /incoming
+app.get('/incoming', (req, res) => {
+  res.send('👋 This endpoint only works with POST requests from WhatsApp.');
 });
 
 // Start server
