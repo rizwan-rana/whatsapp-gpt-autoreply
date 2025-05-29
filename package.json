@@ -1,14 +1,16 @@
 {
   "name": "whatsapp-gpt-autoreply",
   "version": "1.0.0",
+  "description": "Auto-reply system for WhatsApp using Twilio and OpenAI",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "dotenv": "^16.0.3",
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "openai": "^4.0.0",
-    "twilio": "^4.0.0"
+    "openai": "^4.26.0",
+    "twilio": "^4.11.0"
   }
 }
