@@ -1,52 +1,62 @@
 const express = require('express');
-const { MessagingResponse } = require('twilio').twiml;
-const { OpenAI } = require('openai');
+const bodyParser = require('body-parser');
+const { Configuration, OpenAIApi } = require('openai');
 require('dotenv').config();
 
 const app = express();
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3000;
 
-app.use(express.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
 
-// Health check
+// Default route
 app.get('/', (req, res) => {
-  res.send('✅ WhatsApp GPT Auto-Reply bot is live!');
+  res.send('✅ WhatsApp GPT Auto-Reply Bot is live!');
 });
 
-// WhatsApp webhook
+// Webhook to receive WhatsApp messages
 app.post('/incoming', async (req, res) => {
-  console.log('📩 Incoming from Twilio:', req.body);
-
-  const incomingText = req.body.Body || '...';
-  const twiml = new MessagingResponse();
-
   try {
-    const openai = new OpenAI({
+    const incomingMsg = req.body.Body || '';
+    const sender = req.body.From || '';
+
+    console.log(`📩 Incoming from ${sender}:`, incomingMsg);
+
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('❌ OPENAI_API_KEY is missing!');
+      return res.status(500).send('API key not configured.');
+    }
+
+    const configuration = new Configuration({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const chatReply = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: incomingText }],
+    const openai = new OpenAIApi(configuration);
+
+    const completion = await openai.createChatCompletion({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: incomingMsg },
+      ],
     });
 
-    const replyText = chatReply.choices[0].message.content;
-    twiml.message(replyText);
+    const reply = completion.data.choices[0].message.content;
+    console.log(`🤖 Replying to ${sender}:`, reply);
 
+    res.send(`<Response><Message>${reply}</Message></Response>`);
   } catch (error) {
-    console.error('❌ GPT error:', error.message);
-    twiml.message("Sorry, I'm having trouble replying right now.");
+    console.error('❌ Error:', error.message);
+    res.send(`<Response><Message>Sorry, I'm having trouble replying right now.</Message></Response>`);
   }
-
-  res.type('text/xml');
-  res.send(twiml.toString());
 });
 
-// Optional browser access to /incoming
+// Fallback GET
 app.get('/incoming', (req, res) => {
   res.send('👋 This endpoint only works with POST requests from WhatsApp.');
 });
 
+// Start server
 app.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
 });
