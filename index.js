@@ -8,39 +8,44 @@ const port = process.env.PORT || 8080;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// Health check route
+// Health check
 app.get('/', (req, res) => {
-  res.send('Rizwan Auto GPT AI is live!');
+  res.send('✅ Rizwan GPT Auto-Reply is live!');
 });
 
-// Incoming webhook
+// WhatsApp Webhook
 app.post('/incoming', async (req, res) => {
   const incomingMsg = req.body.Body || '';
-  const to = req.body.To || '';
   const from = req.body.From || '';
 
   try {
     const configuration = new Configuration({
-      apiKey: process.env.OPENAI_API_KEY
+      apiKey: process.env.OPENAI_API_KEY,
     });
+
     const openai = new OpenAIApi(configuration);
 
-    const reply = await openai.createChatCompletion({
+    const response = await openai.createChatCompletion({
       model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: incomingMsg }]
+      messages: [{ role: 'user', content: incomingMsg }],
     });
 
-    const message = reply.data.choices[0].message.content;
-    console.log(`Message from ${from} to ${to}: ${incomingMsg}`);
-    console.log(`Reply: ${message}`);
+    const reply = response.data.choices[0].message.content;
+
+    console.log(`📩 From: ${from} | 💬 User: ${incomingMsg}`);
+    console.log(`🤖 GPT: ${reply}`);
   } catch (error) {
-    console.error('Error:', error.message);
+    console.error('❌ OpenAI error:', error.message);
   }
 
-  res.send('OK');
+  res.send('Webhook received');
 });
 
-// Start server
+// Fallback for GET
+app.get('/incoming', (req, res) => {
+  res.send('Only POST requests are accepted.');
+});
+
 app.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
 });
