@@ -1,46 +1,67 @@
-const express = require("express");
-const { MessagingResponse } = require("twilio").twiml;
-const { Configuration, OpenAIApi } = require("openai");
-require("dotenv").config();
+const express = require('express');
+const bodyParser = require('body-parser');
+const { Configuration, OpenAIApi } = require('openai');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8080;
 
-app.use(express.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
 
-app.get("/", (req, res) => {
-  res.send("✅ WhatsApp GPT Auto-Reply is live!");
+// Health check
+app.get('/', (req, res) => {
+  res.send('✅ WhatsApp GPT Auto-Reply bot is running!');
 });
 
-app.post("/incoming", async (req, res) => {
-  const twiml = new MessagingResponse();
-  const incomingMsg = req.body.Body || "";
-  const toSend = incomingMsg.trim().toLowerCase();
+app.post('/incoming', async (req, res) => {
+  const body = req.body;
 
-  try {
-    const openai = new OpenAIApi(
-      new Configuration({
-        apiKey: process.env.OPENAI_API_KEY,
-      })
-    );
-
-    const gptRes = await openai.createChatCompletion({
-      model: "gpt-4", // fallback to gpt-3.5-turbo if needed
-      messages: [{ role: "user", content: toSend }],
-    });
-
-    const reply = gptRes.data.choices[0].message.content;
-    twiml.message(reply);
-  } catch (err) {
-    console.error("❌ GPT error:", err.message || err);
-    twiml.message("Sorry, I'm having trouble replying right now.");
+  // Ensure OpenAI key exists
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+  if (!openaiApiKey) {
+    console.error('❌ OPENAI_API_KEY is not set.');
+    return res.status(500).send('Server configuration error.');
   }
 
-  res.type("text/xml").send(twiml.toString());
+  const configuration = new Configuration({
+    apiKey: openaiApiKey,
+  });
+  const openai = new OpenAIApi(configuration);
+
+  const messageBody = body.Body || '';
+  const fromNumber = body.From || 'Unknown sender';
+
+  try {
+    console.log(`📩 Incoming message from ${fromNumber}:`, messageBody);
+
+    const completion = await openai.createChatCompletion({
+      model: 'gpt-4',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are Rizwan Rana responding via WhatsApp. Always reply in Roman Urdu or English, matching tone of sender.',
+        },
+        {
+          role: 'user',
+          content: messageBody,
+        },
+      ],
+    });
+
+    const reply = completion.data.choices[0].message.content;
+    console.log(`🤖 Reply: ${reply}`);
+
+    res.set('Content-Type', 'text/plain');
+    res.send(reply);
+  } catch (error) {
+    console.error('❌ OpenAI error:', error.message || error);
+    res.status(500).send('Sorry, I am having trouble replying right now.');
+  }
 });
 
-app.post("*", (req, res) => {
-  res.status(405).send("👋 This endpoint only accepts POST requests to /incoming.");
+// Fallback for GET requests to /incoming
+app.get('/incoming', (req, res) => {
+  res.send('👋 This endpoint only works with POST requests from WhatsApp.');
 });
 
 app.listen(port, () => {
