@@ -1,67 +1,66 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const { MessagingResponse } = require('twilio').twiml;
-const { OpenAI } = require('openai');
+const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const axios = require('axios');
+const fs = require('fs');
 require('dotenv').config();
 
-const app = express();
-const port = process.env.PORT || 3000;
+const { state, saveState } = useSingleFileAuthState('./auth_info/session.json');
 
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
-
-// Health check route
-app.get('/', (req, res) => {
-  res.send('✅ WhatsApp Auto-Reply is active.');
-});
-
-// Incoming WhatsApp messages
-app.post('/incoming', async (req, res) => {
-  const incomingMsg = req.body.Body?.trim() || '';
-  const sender = req.body.From || 'Unknown';
-  const twiml = new MessagingResponse();
-
-  console.log(`📩 Message from ${sender}: "${incomingMsg}"`);
-
-  if (!incomingMsg) {
-    console.warn('⚠️ Empty message received');
-    return res.send(twiml.toString());
-  }
-
-  try {
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are Rizwan. Always reply in Roman Urdu. Be natural, friendly, and polite unless the message is business/formal.',
-        },
-        {
-          role: 'user',
-          content: incomingMsg,
-        },
-      ],
+async function connectToWhatsApp() {
+    const sock = makeWASocket({
+        auth: state,
+        logger: require('pino')({ level: 'silent' }),
     });
 
-    const reply = response.choices?.[0]?.message?.content || "Theek hoon yaar, tum sunao?";
-    console.log(`🤖 Reply: ${reply}`);
-    twiml.message(reply);
-  } catch (err) {
-    console.error('❌ OpenAI error:', err.message);
-    twiml.message("Yaar abhi masla lag raha hai. Thodi der baad try karo.");
-  }
+    sock.ev.on('creds.update', saveState);
 
-  res.send(twiml.toString());
-});
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('Connection closed. Reconnecting...', shouldReconnect);
+            if (shouldReconnect) connectToWhatsApp();
+        } else if (connection === 'open') {
+            console.log('✅ WhatsApp Connected');
+        }
+    });
 
-// Handle unknown routes
-app.use((req, res) => {
-  res.status(404).send("❌ Invalid endpoint. Use POST /incoming only.");
-});
+    sock.ev.on('messages.upsert', async (msg) => {
+        const m = msg.messages[0];
+        if (!m.message || m.key.fromMe) return;
 
-// Start server
-app.listen(port, () => {
-  console.log(`🚀 Server is live on port ${port}`);
-});
+        const text = m.message.conversation || m.message.extendedTextMessage?.text || '';
+        if (!text) return;
+
+        console.log('📩 Message from:', m.key.remoteJid, '| Text:', text);
+
+        const reply = await getGPTReply(text);
+        if (reply) {
+            await sock.sendMessage(m.key.remoteJid, { text: reply }, { quoted: m });
+        }
+    });
+}
+
+async function getGPTReply(message) {
+    try {
+        const res = await axios.post('https://api.openai.com/v1/chat/completions', {
+            model: 'gpt-3.5-turbo',
+            messages: [
+                { role: 'system', content: 'You are a helpful WhatsApp assistant.' },
+                { role: 'user', content: message }
+            ]
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        return res.data.choices[0].message.content.trim();
+    } catch (err) {
+        console.error('❌ GPT API Error:', err.message);
+        return "Sorry, I'm having trouble replying right now.";
+    }
+}
+
+connectToWhatsApp();
