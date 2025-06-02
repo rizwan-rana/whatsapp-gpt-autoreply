@@ -1,70 +1,44 @@
-const { default: makeWASocket, useSingleFileAuthState } = require("@whiskeysockets/baileys");
-const qrcode = require("qrcode-terminal");
-const axios = require("axios");
-const fs = require("fs");
-require("dotenv").config();
+const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const qrcode = require('qrcode-terminal');
+const fs = require('fs');
+require('dotenv').config();
 
-// Auth directory (session will be saved here)
-const { state, saveState } = useSingleFileAuthState("./auth_info/session.json");
+const { state, saveState } = useSingleFileAuthState('./auth_info/session.json');
 
-async function startBot() {
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: true,
-  });
+async function startSock() {
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true
+    });
 
-  sock.ev.on("creds.update", saveState);
+    sock.ev.on('creds.update', saveState);
 
-  // Show QR in terminal
-  sock.ev.on("connection.update", ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
-      qrcode.generate(qr, { small: true });
-    }
-    if (connection === "close") {
-      const reason = lastDisconnect?.error?.output?.statusCode;
-      console.log("Connection closed:", reason);
-    }
-    if (connection === "open") {
-      console.log("✅ WhatsApp Connected");
-    }
-  });
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update;
+        if(connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error = new Boom(lastDisconnect?.error))?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('Connection closed due to', lastDisconnect.error, ', reconnecting', shouldReconnect);
+            if(shouldReconnect) {
+                startSock();
+            }
+        } else if(connection === 'open') {
+            console.log('Connected');
+        }
+    });
 
-  // Respond to messages
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    const msg = messages[0];
-    if (!msg.message || msg.key.fromMe) return;
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const msg = messages[0];
+        if (!msg.message) return;
+        const sender = msg.key.remoteJid;
+        const messageContent = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        console.log(`Received message: ${messageContent} from ${sender}`);
 
-    const textMsg = msg.message.conversation || msg.message.extendedTextMessage?.text;
-    if (!textMsg) return;
-
-    const reply = await getGPTReply(textMsg);
-
-    await sock.sendMessage(msg.key.remoteJid, { text: reply });
-    console.log(`Replied to ${msg.key.remoteJid}: ${reply}`);
-  });
+        if (messageContent) {
+            const response = `You said: ${messageContent}`;
+            await sock.sendMessage(sender, { text: response });
+        }
+    });
 }
 
-// Get GPT reply from OpenAI
-async function getGPTReply(message) {
-  try {
-    const res = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-3.5-turbo",
-        messages: [{ role: "user", content: message }],
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    return res.data.choices[0].message.content.trim();
-  } catch (err) {
-    console.error("❌ GPT API Error:", err.message);
-    return "Sorry, I'm having trouble replying right now.";
-  }
-}
-
-startBot();
+startSock();

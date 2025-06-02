@@ -1,14 +1,14 @@
 {
-  "name": "rana-whatsapp-bot",
+  "name": "whatsapp-gpt-autoreply",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.5.0",
-    "axios": "^1.6.0",
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.4.0",
     "dotenv": "^16.0.3",
-    "pino": "^8.14.2"
+    "qrcode-terminal": "^0.12.0"
   }
 }
