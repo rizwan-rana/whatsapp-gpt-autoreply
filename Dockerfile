@@ -2,13 +2,14 @@ FROM node:18-slim
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
-
+# Copy everything first to ensure all files are available
 COPY . .
 
-RUN mkdir -p auth_info
+# Install dependencies
+RUN npm install
 
+# Expose port (not required unless you're running a web service)
 EXPOSE 3000
 
+# Start the bot
 CMD ["node", "index.js"]
